@@ -1,0 +1,64 @@
+# Dreamer v1 標準ハイパラ (DMC walker_walk)
+# 出典: 公式実装 https://github.com/danijar/dreamer (verified 2026-05)
+#       paper:   Hafner et al. (2020) "Dream to Control" arXiv:1912.01603
+#
+# 値はすべて公式 dreamer.py::define_config() に対応.
+
+env:
+  domain: walker
+  task: walk
+  action_repeat: 2
+  image_size: 64
+
+replay:
+  capacity: 1_000_000
+  batch_size: 50          # config.batch_size
+  seq_len: 50             # config.batch_length
+
+model:
+  # CNN encoder/decoder
+  cnn_depth: 32           # config.cnn_depth (channel multiplier: 32,64,128,256)
+  cnn_act: relu           # encoder/decoder の活性化
+
+  # RSSM
+  rssm_deter: 200         # config.deter_size (GRU hidden, H)
+  rssm_stoch: 30          # config.stoch_size (確率的潜在 Z)
+  rssm_hidden: 200        # RSSM 内部 Dense の幅 (公式は hidden_size=200 で固定)
+  rssm_act: elu           # RSSM 内部 Dense の活性化
+  min_std: 0.1            # σ = softplus(x) + 0.1
+
+  # Heads (reward, value, actor) は共通で num_units=400, 3 層, ELU
+  num_units: 400          # config.num_units
+  num_layers: 3           # 3 dense layers
+  mlp_act: elu
+
+  # Actor parametrization
+  action_init_std: 5.0    # config.action_init_std → softplus(s + log(e^5-1)) + 1e-4
+  action_dist: tanh_normal  # mean=5*tanh(m/5), std as above, then TanhBijector
+
+train:
+  total_steps: 1_000_000
+  prefill_episodes: 5     # config.seed_episodes
+  pretrain: 100           # config.pretrain (初期 100 step は env と無関係に学習)
+  train_every: 1000       # config.train_every (env steps ごとに train_steps 回学習)
+  train_steps: 100        # config.train_steps
+  log_every: 100
+  eval_every: 10000
+  save_every: 50000
+
+optim:
+  wm_lr: 6.0e-4           # config.model_lr
+  actor_lr: 8.0e-5        # config.actor_lr
+  critic_lr: 8.0e-5       # config.value_lr
+  grad_clip: 100.0        # config.grad_clip
+  weight_decay: 0.0       # config.weight_decay
+  kl_beta: 1.0            # config.kl_scale
+  kl_free_nats: 3.0       # config.free_nats
+
+imagine:
+  horizon: 15             # config.horizon (H_imag)
+  gamma: 0.99             # config.discount
+  lambda_: 0.95           # config.disclam
+
+explore:
+  noise_amount: 0.3       # config.expl_amount, action に Normal(0, 0.3) を加算
